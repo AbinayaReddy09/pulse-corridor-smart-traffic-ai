@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro-Command Traffic AI | V9-LIDAR LOCK (Priority Tuned)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #020205; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        #command-center {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0, 5, 10, 0.95); color: #00f2ff;
+            padding: 25px; border-radius: 5px; width: 350px;
+            box-shadow: 0 0 50px rgba(0,242,255,0.15);
+            pointer-events: none; border-left: 4px solid #00f2ff;
+            z-index: 10;
+        }
+
+        #log-panel {
+            position: absolute; top: 320px; left: 20px;
+            background: rgba(0, 5, 10, 0.85); color: #00f2ff;
+            padding: 15px; border-radius: 5px; width: 350px;
+            height: 300px; overflow-y: auto;
+            border-left: 4px solid #556; font-family: 'Courier New', monospace;
+            font-size: 11px; pointer-events: auto; z-index: 10;
+            scrollbar-width: thin; scrollbar-color: #00f2ff #000;
+        }
+        #log-panel::-webkit-scrollbar { width: 5px; }
+        #log-panel::-webkit-scrollbar-thumb { background: #00f2ff; }
+
+        .log-entry { margin-bottom: 8px; border-bottom: 1px solid #112; padding-bottom: 4px; }
+        .log-time { color: #556; margin-right: 8px; }
+        .log-id { color: #fff; font-weight: bold; }
+        .log-stat { color: #00ff95; float: right; }
+
+        #matrix-toggle {
+            position: absolute; bottom: 20px; right: 20px;
+            background: #00f2ff; color: #000; padding: 15px 25px;
+            font-weight: bold; border-radius: 5px; cursor: pointer;
+            z-index: 1001; box-shadow: 0 0 20px rgba(0,242,255,0.4);
+            transition: 0.3s; border: none; font-size: 12px; letter-spacing: 1px;
+        }
+        #matrix-toggle:hover { transform: scale(1.05); background: #fff; }
+
+        #control-matrix {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: rgba(0, 10, 20, 0.95); border: 1px solid #00f2ff;
+            width: 450px; padding: 30px; border-radius: 15px;
+            color: white; opacity: 0; visibility: hidden;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000; backdrop-filter: blur(10px);
+            box-shadow: 0 0 100px rgba(0,0,0,1), 0 0 30px rgba(0,242,255,0.2);
+        }
+        #control-matrix.active { opacity: 1; visibility: visible; transform: translate(-50%, -50%) scale(1); }
+
+        .matrix-header { 
+            border-bottom: 1px solid rgba(0,242,255,0.3); 
+            padding-bottom: 15px; margin-bottom: 20px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .matrix-section { margin-bottom: 20px; }
+        .matrix-label { font-size: 10px; color: #00f2ff; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; display: block; }
+        
+        .grid-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        
+        .m-btn {
+            background: rgba(0,242,255,0.05); border: 1px solid rgba(0,242,255,0.3);
+            color: #00f2ff; padding: 10px; cursor: pointer; font-size: 11px;
+            transition: 0.2s; text-align: center; border-radius: 4px;
+        }
+        .m-btn:hover { background: rgba(0,242,255,0.2); border-color: #00f2ff; }
+        .m-btn.active { background: #00f2ff; color: #000; font-weight: bold; }
+        .m-btn.danger { border-color: #ff0044; color: #ff0044; }
+        .m-btn.danger:hover { background: #ff0044; color: #fff; }
+
+        .slider-row { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; }
+        .slider-row input { flex-grow: 1; accent-color: #00f2ff; }
+        .slider-row span { min-width: 40px; font-family: monospace; color: #00f2ff; font-size: 12px; }
+
+        #sensor-panel {
+            position: absolute; top: 20px; right: 20px;
+            background: rgba(0, 8, 15, 0.95); color: #00f2ff;
+            padding: 20px; border-radius: 5px; width: 300px;
+            box-shadow: 0 0 40px rgba(255, 0, 68, 0.1);
+            border-right: 4px solid #ff0044; font-family: 'Courier New', monospace;
+            pointer-events: none;
+        }
+
+        .status-active { color: #ff0044; animation: scan-pulse 0.8s infinite alternate; font-weight: bold; }
+        .live-value { color: #fff; text-shadow: 0 0 5px #00f2ff; }
+        .scanning-text { color: #556; font-style: italic; }
+
+        @keyframes scan-pulse { 
+            from { opacity: 1; transform: scale(1); } 
+            to { opacity: 0.5; transform: scale(0.98); } 
+        }
+
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-family: 'Courier New', monospace; border-bottom: 1px solid #112; }
+        .tag { color: #556; font-size: 10px; font-weight: bold; }
+        
+        #controls-bottom {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 15px; background: rgba(0,0,0,0.9); padding: 15px; border-radius: 10px;
+            border: 1px solid #00f2ff; z-index: 10;
+        }
+        .btn-spawn {
+            background: #000; border: 1px solid #ff0044; color: #ff0044;
+            padding: 10px 15px; cursor: pointer; text-transform: uppercase;
+            font-size: 10px; font-weight: bold; transition: 0.2s; pointer-events: auto;
+        }
+        .btn-spawn:hover { background: #ff0044; color: #000; }
+        
+        #alert-box { color: #ff0044; font-size: 20px; text-align: center; display: none; margin-bottom: 20px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="command-center">
+    <div id="alert-box">AMBULANCE DETECTED - CORRIDOR LOCK</div>
+    <div style="font-size: 12px; color: #556; margin-bottom: 5px;">SYSTEM STATUS: <span id="sys-status-text" style="color:#00ff95">AI-DRIVEN PREEMPTION</span></div>
+    <div style="font-size: 20px; margin-bottom: 20px; letter-spacing: 3px;">TRAFFIC CONTROL PRO</div>
+    <div class="data-row"><span class="tag">ACTIVE SIGNAL</span><span id="sig-info">INIT...</span></div>
+    <div class="data-row"><span class="tag">AMB PROCESSED</span><span id="amb-count">0 UNITS</span></div>
+    <div class="data-row"><span class="tag">QUEUE DEPTH</span><span id="queue-info">0 UNITS</span></div>
+</div>
+
+<div id="log-panel">
+    <div style="color: #556; font-size: 10px; margin-bottom: 10px; border-bottom: 1px solid #222;">SYSTEM EVENT LOGS</div>
+    <div id="log-content"></div>
+</div>
+
+<button id="matrix-toggle" onclick="toggleMatrix()">SYSTEM SETTINGS</button>
+
+<div id="control-matrix">
+    <div class="matrix-header">
+        <span style="color:#00f2ff; font-weight: bold; letter-spacing: 2px;">COMMAND MATRIX v9.4</span>
+        <button onclick="toggleMatrix()" style="background:none; border:none; color:#556; cursor:pointer; font-size:20px;">×</button>
+    </div>
+
+    <div class="matrix-section">
+        <span class="matrix-label">Core Engine Mode</span>
+        <div class="grid-buttons">
+            <button id="btn-ai-on" class="m-btn active" onclick="setAIMode(true)">AI ADAPTIVE ON</button>
+            <button id="btn-ai-off" class="m-btn" onclick="setAIMode(false)">MANUAL TIMER</button>
+        </div>
+    </div>
+
+    <div class="matrix-section">
+        <span class="matrix-label">Flow Dynamics</span>
+        <div class="slider-row">
+            <span style="font-size: 9px;">DENSITY</span>
+            <input type="range" id="density-slider-m" min="5" max="400" value="80" oninput="updateDensity(this.value)">
+            <span id="density-val-m">80</span>
+        </div>
+        <div class="slider-row">
+            <span style="font-size: 9px;">VELOCITY</span>
+            <input type="range" id="speed-slider-m" min="1" max="25" value="8" oninput="updateGlobalSpeed(this.value)">
+            <span id="speed-val-m">8.0</span>
+        </div>
+    </div>
+
+    <div class="matrix-section">
+        <span class="matrix-label">Environment Overrides</span>
+        <div class="grid-buttons">
+            <button class="m-btn" onclick="setEnv('day')">DAYLIGHT</button>
+            <button class="m-btn" onclick="setEnv('night')">CYBER NIGHT</button>
+        </div>
+    </div>
+
+    <div class="matrix-section" style="border-top: 1px solid #222; padding-top: 15px;">
+        <span class="matrix-label">Emergency Protocol</span>
+        <div class="grid-buttons">
+            <button class="m-btn danger" onclick="forceAllRed()">EMERGENCY ALL-RED</button>
+            <button class="m-btn" style="border-color:#00ff95; color:#00ff95" onclick="togglePause()" id="pause-btn-m">PAUSE SYSTEM</button>
+        </div>
+    </div>
+</div>
+
+<div id="sensor-panel">
+    <div style="font-size: 12px; color: #556; border-bottom: 1px solid #222; padding-bottom: 5px;">LIDAR TELEMETRY</div>
+    <div style="margin-top:10px; font-size: 11px;">
+        CAMERA: <span id="cam-status">IDLE</span><br>
+        SIREN: <span id="aud-status" style="color:#556">N/A</span>
+    </div>
+    <div style="margin-top:15px; font-size: 11px; line-height: 1.8;">
+        PRIORITY ID: <span id="track-id" class="scanning-text">Searching...</span><br>
+        SPEED: <span id="track-speed" class="scanning-text">---</span><br>
+        DISTANCE: <span id="track-dist" class="scanning-text">---</span><br>
+        FILTER: <span style="color:#ff0044">EMERGENCY LOCK</span>
+    </div>
+</div>
+
+<div id="controls-bottom">
+    <button class="btn-spawn" onclick="spawnAmb('N')">+ N Amb</button>
+    <button class="btn-spawn" onclick="spawnAmb('S')">+ S Amb</button>
+    <button class="btn-spawn" onclick="spawnAmb('E')">+ E Amb</button>
+    <button class="btn-spawn" onclick="spawnAmb('W')">+ W Amb</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+    let scene, camera, renderer, controls, clock, sun, ambient;
+    let vehicles = [];
+    let signalPoles = [];
+    let isPaused = false;
+    let maxDensity = 80;
+    let globalSpeedMult = 1.0;
+    let aiControlEnabled = true;
+    let allRedLock = false;
+
+    let audioCtx = null, sirenOsc = null;
+    let totalAmbPassed = 0;
+    let activePriorityVehicleId = null;
+    let priorityStartTime = 0;
+    
+    const PHASE_NS = 0, PHASE_EW = 1;
+    let currentPhase = PHASE_NS;
+    let phaseTimer = 0;
+
+    init();
+    animate();
+
+    function toggleMatrix() {
+        document.getElementById('control-matrix').classList.toggle('active');
+    }
+
+    function setAIMode(val) {
+        aiControlEnabled = val;
+        allRedLock = false;
+        document.getElementById('btn-ai-on').classList.toggle('active', val);
+        document.getElementById('btn-ai-off').classList.toggle('active', !val);
+        document.getElementById('sys-status-text').innerText = val ? "AI-DRIVEN PREEMPTION" : "MANUAL TIMER MODE";
+        document.getElementById('sys-status-text').style.color = val ? "#00ff95" : "#ffcc00";
+    }
+
+    function updateDensity(v) { 
+        maxDensity = v; 
+        document.getElementById('density-val-m').innerText = v; 
+    }
+
+    function updateGlobalSpeed(v) {
+        globalSpeedMult = v / 8.0;
+        document.getElementById('speed-val-m').innerText = parseFloat(v).toFixed(1);
+    }
+
+    function forceAllRed() {
+        allRedLock = !allRedLock;
+        aiControlEnabled = false;
+        document.getElementById('btn-ai-on').classList.remove('active');
+        document.getElementById('btn-ai-off').classList.add('active');
+        document.getElementById('sys-status-text').innerText = allRedLock ? "EMERGENCY ALL-RED LOCK" : "MANUAL TIMER MODE";
+        document.getElementById('sys-status-text').style.color = "#ff0044";
+    }
+
+    function setEnv(m) {
+        if(m === 'day') { scene.background = new THREE.Color(0x1a1a2e); sun.intensity = 1.6; }
+        else { scene.background = new THREE.Color(0x010103); sun.intensity = 0.2; }
+    }
+
+    function addLog(id, direction) {
+        const content = document.getElementById('log-content');
+        const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+        entry.id = 'log-' + id;
+        entry.innerHTML = `
+            <span class="log-time">[${time}]</span>
+            <span class="log-id">${id}</span> | Dir: ${direction}
+            <span class="log-stat" id="stat-${id}">APPROACHING</span>
+            <div style="color:#556; font-size:9px; margin-top:2px;">Lock Duration: <span id="dur-${id}">0s</span></div>
+        `;
+        content.prepend(entry);
+    }
+
+    function updateLogStatus(id, status, duration) {
+        const statEl = document.getElementById('stat-' + id);
+        const durEl = document.getElementById('dur-' + id);
+        if(statEl) {
+            statEl.innerText = status;
+            if(status === 'CLEARED') statEl.style.color = '#00ff95';
+        }
+        if(durEl && duration) durEl.innerText = duration.toFixed(1) + 's';
+    }
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x010103);
+        camera = new THREE.PerspectiveCamera(40, window.innerWidth/window.innerHeight, 1, 5000);
+        camera.position.set(400, 300, 400);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        clock = new THREE.Clock();
+
+        sun = new THREE.DirectionalLight(0xffffff, 1.5);
+        sun.position.set(100, 500, 100);
+        sun.castShadow = true;
+        ambient = new THREE.AmbientLight(0x4040ff, 0.2);
+        scene.add(sun, ambient);
+
+        buildCity();
+        createSignals();
+        setInterval(() => { if(!isPaused && vehicles.length < maxDensity) spawnCar(); }, 300);
+    }
+
+    function buildCity() {
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshPhongMaterial({color: 0x050505}));
+        ground.rotation.x = -Math.PI/2; ground.receiveShadow = true;
+        scene.add(ground);
+
+        [0, Math.PI/2].forEach(rot => {
+            const roadGrp = new THREE.Group();
+            const road = new THREE.Mesh(new THREE.PlaneGeometry(5000, 80), new THREE.MeshPhongMaterial({color: 0x000000}));
+            road.rotation.x = -Math.PI/2; roadGrp.add(road);
+            
+            const zMat = new THREE.MeshBasicMaterial({color: 0x888888});
+            [-115, 115].forEach(zPos => {
+                for(let i=-35; i<=35; i+=10) {
+                    const strip = new THREE.Mesh(new THREE.PlaneGeometry(28, 5), zMat);
+                    strip.rotation.x = -Math.PI/2; strip.position.set(zPos, 0.5, i);
+                    roadGrp.add(strip);
+                }
+            });
+
+            roadGrp.rotation.y = rot;
+            scene.add(roadGrp);
+        });
+    }
+
+    function createSignals() {
+        const spots = [{x:55, z:55, r:0, t:PHASE_NS}, {x:-55, z:-55, r:Math.PI, t:PHASE_NS}, {x:-55, z:55, r:Math.PI/2, t:PHASE_EW}, {x:55, z:-55, r:-Math.PI/2, t:PHASE_EW}];
+        spots.forEach(s => {
+            const g = new THREE.Group();
+            const p = new THREE.Mesh(new THREE.BoxGeometry(4, 80, 4), new THREE.MeshPhongMaterial({color:0x222222})); p.position.y = 40;
+            const rl = new THREE.Mesh(new THREE.CircleGeometry(4, 16), new THREE.MeshBasicMaterial({color:0xff0000})); rl.position.set(0, 72, 4.1);
+            const gl = new THREE.Mesh(new THREE.CircleGeometry(4, 16), new THREE.MeshBasicMaterial({color:0x00ff00})); gl.position.set(0, 58, 4.1);
+            const rp = new THREE.PointLight(0xff0000, 0, 40); rp.position.set(0, 72, 10);
+            const gp = new THREE.PointLight(0x00ff00, 0, 40); gp.position.set(0, 58, 10);
+            g.add(p, rl, gl, rp, gp);
+            g.position.set(s.x, 0, s.z); g.rotation.y = s.r;
+            scene.add(g);
+            signalPoles.push({type: s.t, rl, gl, rp, gp});
+        });
+    }
+
+    class Vehicle {
+        constructor(isAmb, startDir = 'N') {
+            this.id = (isAmb ? "AMB-" : "CAR-") + Math.floor(Math.random() * 9999);
+            this.isAmb = isAmb;
+            this.startDir = startDir;
+            this.group = new THREE.Group();
+            const color = isAmb ? 0xffffff : new THREE.Color().setHSL(Math.random(), 0.5, 0.4);
+            const body = new THREE.Mesh(new THREE.BoxGeometry(16, 12, 28), new THREE.MeshPhongMaterial({color}));
+            body.position.y = 6; body.castShadow = true;
+            this.group.add(body);
+
+            if(isAmb) {
+                this.light = new THREE.PointLight(0xff0000, 15, 120);
+                this.light.position.y = 18;
+                this.group.add(this.light);
+                const boxGeom = new THREE.BoxGeometry(22, 15, 34);
+                const edges = new THREE.EdgesGeometry(boxGeom);
+                this.highlight = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({color: 0xff0044}));
+                this.highlight.position.y = 6;
+                this.group.add(this.highlight);
+                addLog(this.id, startDir);
+            }
+
+            const paths = {'N':{a:'z',d:1,l:-22,p:-1500}, 'S':{a:'z',d:-1,l:22,p:1500}, 'E':{a:'x',d:-1,l:-22,p:1500}, 'W':{a:'x',d:1,l:22,p:-1500}};
+            const c = isAmb ? paths[startDir] : Object.values(paths)[Math.floor(Math.random()*4)];
+            this.axis = c.a; this.dir = c.d; this.lane = c.l; this.pos = c.p;
+            this.v = 0; 
+            this.maxV = (isAmb ? 9.5 : (3.5 + Math.random() * 4.0)); 
+            this.startDelay = Math.random() * 0.4;
+            scene.add(this.group);
+        }
+
+        update(phase, all, ambActiveOnMyAxis) {
+            if(isPaused) return true;
+            
+            let mySig = this.axis === 'z' ? PHASE_NS : PHASE_EW;
+            let distToStop = (-110 * this.dir - this.pos) * this.dir; 
+            let targetV = this.maxV * globalSpeedMult;
+
+            // AMBULANCE SPEED BOOST & CLEARANCE
+            if(ambActiveOnMyAxis && !this.isAmb) {
+                targetV *= 1.2; // Speed up to clear the way
+            }
+
+            // 1. SIGNAL BRAKING
+            if (!this.isAmb && (phase !== mySig || allRedLock)) {
+                if (distToStop > 0 && distToStop < 350) {
+                    let brakingFactor = Math.max(0, distToStop / 350);
+                    targetV = Math.min(targetV, this.maxV * Math.sqrt(brakingFactor));
+                    if (distToStop < 15) targetV = 0;
+                }
+            }
+
+            // 2. ADAPTIVE STARTING
+            if (this.v === 0 && (phase === mySig && !allRedLock)) {
+                this.startDelay -= 0.016;
+                if (this.startDelay > 0) targetV = 0;
+            }
+
+            // 3. COLLISION PREVENTION
+            all.forEach(o => {
+                if(o.id === this.id) return;
+                if(o.axis === this.axis && o.lane === this.lane) {
+                    let gap = (o.pos - this.pos) * this.dir;
+                    if(gap > 0 && gap < 300) {
+                        // If an ambulance is behind, cars pack tighter to move forward
+                        let baseGap = (ambActiveOnMyAxis) ? 30 : 45;
+                        let safeGap = baseGap + (this.v * 4.0); 
+                        if(gap < safeGap) {
+                            targetV = Math.min(targetV, o.v * 0.95);
+                        }
+                        if(gap < (ambActiveOnMyAxis ? 30 : 38)) targetV = 0;
+                    }
+                }
+            });
+
+            let lerpFactor = targetV < this.v ? 0.3 : 0.08;
+            this.v = THREE.MathUtils.lerp(this.v, targetV, lerpFactor);
+            
+            this.pos += this.v * this.dir;
+            this.group.position[this.axis] = this.pos;
+            this.group.position[this.axis === 'x' ? 'z' : 'x'] = this.lane;
+            this.group.rotation.y = (this.axis === 'x') ? Math.PI/2 : 0;
+
+            if(this.isAmb) {
+                this.light.intensity = Math.sin(Date.now()*0.05) > 0 ? 25 : 0;
+                this.highlight.visible = (Math.sin(Date.now()*0.1) > 0);
+                let crossDist = (this.pos * this.dir);
+                if(crossDist > 150) updateLogStatus(this.id, 'CLEARED');
+            }
+            return Math.abs(this.pos) < 2500;
+        }
+    }
+
+    function spawnAmb(d) { vehicles.push(new Vehicle(true, d)); startSiren(); }
+    function spawnCar() { vehicles.push(new Vehicle(false)); }
+    
+    function togglePause() { 
+        isPaused = !isPaused; 
+        document.getElementById('pause-btn-m').innerText = isPaused ? "RESUME SYSTEM" : "PAUSE SYSTEM";
+    }
+
+    function startSiren() {
+        if(audioCtx) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        sirenOsc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        sirenOsc.type = 'triangle';
+        sirenOsc.connect(gain); gain.connect(audioCtx.destination);
+        gain.gain.value = 0.05;
+        const loop = () => {
+            if(!audioCtx) return;
+            let t = audioCtx.currentTime;
+            sirenOsc.frequency.setTargetAtTime(600, t, 0.1);
+            sirenOsc.frequency.exponentialRampToValueAtTime(1200, t + 1.5);
+            sirenOsc.frequency.exponentialRampToValueAtTime(600, t + 3.0);
+            setTimeout(loop, 3000);
+        };
+        sirenOsc.start(); loop();
+    }
+
+    function engine() {
+        const delta = clock.getDelta();
+        if(!isPaused) phaseTimer += delta;
+
+        // AMBULANCE DETECTION (Increased range to 800)
+        let ambs = vehicles.filter(v => v.isAmb).sort((a,b) => ((-120*a.dir-a.pos)*a.dir) - ((-120*b.dir-b.pos)*b.dir));
+        let activePriority = ambs.find(a => ((-120*a.dir - a.pos)*a.dir) > -800);
+
+        if(activePriority) {
+            if(activePriorityVehicleId !== activePriority.id) {
+                activePriorityVehicleId = activePriority.id;
+                priorityStartTime = Date.now();
+                totalAmbPassed++;
+                document.getElementById('amb-count').innerText = totalAmbPassed + " UNITS";
+            }
+            
+            let lockDuration = (Date.now() - priorityStartTime) / 1000;
+            updateLogStatus(activePriority.id, 'PRIORITY LOCK', lockDuration);
+
+            // FORCE PHASE CHANGE IMMEDIATELY
+            currentPhase = (activePriority.axis === 'z') ? PHASE_NS : PHASE_EW;
+            document.getElementById('alert-box').style.display = 'block';
+            phaseTimer = 0;
+
+            document.getElementById('cam-status').innerText = "LIVE SCANNING...";
+            document.getElementById('cam-status').className = "status-active";
+            document.getElementById('aud-status').innerText = "ACTIVE";
+            document.getElementById('aud-status').style.color = "#ff0044";
+            document.getElementById('track-id').innerText = activePriority.id;
+            document.getElementById('track-id').className = "live-value";
+            document.getElementById('track-speed').innerText = (activePriority.v * 12).toFixed(2) + " km/h";
+            document.getElementById('track-speed').className = "live-value";
+            document.getElementById('track-dist').innerText = Math.abs(activePriority.pos).toFixed(2) + " units";
+            document.getElementById('track-dist').className = "live-value";
+        } else {
+            activePriorityVehicleId = null;
+            document.getElementById('alert-box').style.display = 'none';
+            document.getElementById('cam-status').innerText = "IDLE";
+            document.getElementById('cam-status').className = "";
+            document.getElementById('aud-status').innerText = "N/A";
+            document.getElementById('aud-status').style.color = "#556";
+            document.getElementById('track-id').innerText = "Searching...";
+            document.getElementById('track-id').className = "scanning-text";
+            document.getElementById('track-speed').innerText = "---";
+            document.getElementById('track-dist').innerText = "---";
+
+            if (!allRedLock && phaseTimer > 2.0) {
+                if(aiControlEnabled) {
+                    let nsN = vehicles.filter(v => v.axis === 'z').length;
+                    let ewN = vehicles.filter(v => v.axis === 'x').length;
+                    let cur = currentPhase === PHASE_NS ? nsN : ewN;
+                    let oth = currentPhase === PHASE_NS ? ewN : nsN;
+                    if(oth > cur + 5 || phaseTimer > 12 || (cur === 0 && oth > 0)) {
+                        currentPhase = 1 - currentPhase;
+                        phaseTimer = 0;
+                    }
+                } else {
+                    if(phaseTimer > 10) {
+                        currentPhase = 1 - currentPhase;
+                        phaseTimer = 0;
+                    }
+                }
+            }
+        }
+
+        document.getElementById('sig-info').innerText = currentPhase === PHASE_NS ? "NORTH-SOUTH" : "EAST-WEST";
+        document.getElementById('queue-info').innerText = vehicles.length + " UNITS";
+
+        signalPoles.forEach(p => {
+            let active = (p.type === currentPhase && !allRedLock);
+            p.rl.material.color.setHex(active ? 0x110000 : 0xff0000);
+            p.gl.material.color.setHex(active ? 0x00ff00 : 0x001100);
+            p.rp.intensity = active ? 0 : 25; p.gp.intensity = active ? 25 : 0;
+        });
+
+        // UPDATE VEHICLES WITH AMBULANCE CONTEXT
+        for(let i=vehicles.length-1; i>=0; i--) {
+            let myAxis = vehicles[i].axis;
+            let ambOnMyAxis = activePriority && activePriority.axis === myAxis;
+            if(!vehicles[i].update(currentPhase, vehicles, ambOnMyAxis)) {
+                scene.remove(vehicles[i].group);
+                vehicles.splice(i, 1);
+            }
+        }
+        if(ambs.length === 0 && audioCtx) { sirenOsc.stop(); audioCtx = null; }
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        engine();
+        controls.update();
+        renderer.render(scene, camera);
+    }
+</script>
+</body>
+</html>
