@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Synthwave — Ambulance Priority Traffic Prototype</title>
+<style>
+:root{
+  --bg1:#070017; --bg2:#160034;
+  --neon-pink:#ff2d95; --neon-purple:#8b5cff; --neon-blue:#3de1ff;
+  --neon-green:#57ff8b; --glass: rgba(255,255,255,0.04);
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:
+  radial-gradient(circle at 10% 10%,var(--bg2) 0%,var(--bg1) 60%);
+  color:#e9eef8; -webkit-font-smoothing:antialiased;}
+.container{min-height:100%;display:flex;align-items:center;justify-content:center;padding:28px}
+.card{width:1100px;max-width:98%;display:grid;grid-template-columns:480px 1fr;gap:26px;
+  padding:24px;border-radius:14px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  box-shadow:0 12px 50px rgba(3,0,10,0.6);border:1px solid rgba(255,255,255,0.04)}
+.left{display:flex;flex-direction:column;gap:18px;align-items:center}
+.pole{width:220px;padding:18px;border-radius:18px;background:linear-gradient(180deg,#020317,#0b0030);
+  box-shadow: 0 10px 40px rgba(61,45,120,0.25);display:flex;flex-direction:column;align-items:center;gap:16px}
+.visor{width:100%;background:linear-gradient(180deg,#000,#080018);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px;align-items:center;box-shadow:inset 0 -8px 30px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.03)}
+.light{width:86px;height:86px;border-radius:50%;background:#111;display:flex;align-items:center;justify-content:center;position:relative;transition:all 180ms ease}
+.light .glow{position:absolute;inset:0;border-radius:50%;filter:blur(16px);opacity:0;transition:opacity 160ms ease}
+.light.red.on{background:radial-gradient(circle at 30% 25%, #ff7b9a, #ff2d95 25%, #8b0f3b 70%);}
+.light.red.on .glow{background:radial-gradient(circle at 30% 25%, rgba(255,66,108,0.9), rgba(255,66,108,0.15));opacity:1}
+.light.yellow.on{background:radial-gradient(circle at 30% 25%, #fff2a3, #ffd66b 25%, #9b6f00 70%)}
+.light.yellow.on .glow{background:radial-gradient(circle at 30% 25%, rgba(255,214,107,0.9), rgba(255,214,107,0.15));opacity:1}
+.light.green.on{background:radial-gradient(circle at 30% 25%, #c9ffd9, #57ff8b 22%, #00643a 70%)}
+.light.green.on .glow{background:radial-gradient(circle at 30% 25%, rgba(87,255,139,0.95), rgba(87,255,139,0.18));opacity:1}
+.light.pulse{animation:pulse 0.7s ease-in-out}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+.label{color:rgba(255,255,255,0.75);font-size:12px;margin-top:6px}
+.videoBox{width:420px;height:240px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+video#cam{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+canvas#camCanvas{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.overlay{position:absolute;inset:0;pointer-events:none}
+
+.right{display:flex;flex-direction:column;gap:12px;padding:4px}
+h1{margin:0;font-size:20px;color:var(--neon-pink);text-shadow:0 0 10px rgba(255,45,149,0.2)}
+.lead{color:rgba(255,255,255,0.8);margin-top:6px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.btn{padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);cursor:pointer;background:linear-gradient(180deg,var(--neon-purple),#5b36ff);color:white;font-weight:700}
+.secondary{background:linear-gradient(180deg,#0b102a,#111328)}
+.statusBox{margin-top:10px;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(61,225,255,0.03), rgba(139,92,255,0.02));border:1px solid rgba(255,255,255,0.03)}
+.meter{height:12px;background:rgba(255,255,255,0.05);border-radius:8px;overflow:hidden;margin-top:8px}
+.meter > i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--neon-blue),var(--neon-purple));transition:width 60ms linear}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.small{font-size:13px;color:rgba(255,255,255,0.7)}
+.alert{margin-top:10px;padding:12px;border-radius:10px;background:linear-gradient(90deg, rgba(255,45,149,0.06), rgba(61,225,255,0.02));border:1px solid rgba(255,255,255,0.03)}
+.footer{font-size:12px;color:rgba(255,255,255,0.5);margin-top:10px}
+
+/* responsive */
+@media(max-width:980px){ .card{grid-template-columns:1fr} .left .videoBox{width:100%} }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <div class="left">
+      <div class="pole">
+        <div class="visor">
+          <div class="light red" id="redLight"><div class="glow"></div></div>
+          <div class="light yellow" id="yellowLight"><div class="glow"></div></div>
+          <div class="light green" id="greenLight"><div class="glow"></div></div>
+          <div class="label">SYNTHWAVE TRAFFIC SIGNAL</div>
+        </div>
+      </div>
+
+      <div class="videoBox">
+        <video id="cam" autoplay muted playsinline></video>
+        <canvas id="camCanvas"></canvas>
+        <div class="overlay" id="overlay"></div>
+      </div>
+      <div class="small">Video: face detection (preferred) or motion fallback. For best results use desktop Chrome/Edge on localhost/HTTPS.</div>
+    </div>
+
+    <div class="right">
+      <h1>Ambulance Priority — Prototype</h1>
+      <div class="lead">Audio-first siren detector with video confirmation. Play a siren near your laptop mic (or use demo). The signal turns <strong>GREEN</strong> and stays green while ambulance is present. Distance affects approach timing.</div>
+
+      <div class="controls">
+        <button class="btn" id="btnAudio">Start Audio</button>
+        <button class="btn" id="btnDemo">Play Demo Siren</button>
+        <button class="btn secondary" id="btnCam">Start Camera</button>
+        <button class="btn secondary" id="btnSim">Simulate Ambulance</button>
+        <button class="btn" id="btnStop">Stop All</button>
+      </div>
+
+      <div class="statusBox">
+        <div class="row"><div class="small"><strong>Mic:</strong> <span id="micState">Inactive</span></div><div class="small"><strong>Cam:</strong> <span id="camState">Inactive</span></div></div>
+        <div style="margin-top:8px" class="row"><div class="small">Siren Detected:</div><div id="sirenState" class="small">No</div></div>
+        <div style="margin-top:6px" class="row"><div class="small">Direction (video):</div><div id="dirState" class="small">None</div></div>
+
+        <div style="margin-top:10px" class="small">Decibel threshold (dBFS)</div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
+          <input id="dbRange" type="range" min="-70" max="-10" step="1" value="-42" style="flex:1">
+          <div style="width:52px;text-align:right" id="dbVal">-42</div>
+        </div>
+
+        <div class="meter" aria-hidden><i id="energyBar"></i></div>
+        <div style="margin-top:8px" class="alert" id="alertMsg">Status: <span id="statusText">Normal</span></div>
+        <div class="footer">Tip: Use Play Demo Siren to test quickly. If face-detection is unavailable the page uses motion fallback.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- UI helpers ---------- */
+const redL = document.getElementById('redLight'), yellowL = document.getElementById('yellowLight'), greenL = document.getElementById('greenLight');
+const btnAudio = document.getElementById('btnAudio'), btnDemo = document.getElementById('btnDemo');
+const btnCam = document.getElementById('btnCam'), btnSim = document.getElementById('btnSim'), btnStop = document.getElementById('btnStop');
+const micState = document.getElementById('micState'), camState = document.getElementById('camState');
+const sirenState = document.getElementById('sirenState'), dirState = document.getElementById('dirState');
+const energyBar = document.getElementById('energyBar'), dbRange = document.getElementById('dbRange'), dbVal = document.getElementById('dbVal');
+const statusText = document.getElementById('statusText'), alertMsg = document.getElementById('alertMsg');
+const cam = document.getElementById('cam'), camCanvas = document.getElementById('camCanvas'), overlay = document.getElementById('overlay');
+const ctx = camCanvas.getContext('2d');
+
+function setLight(state){
+  redL.classList.toggle('on', state==='red');
+  yellowL.classList.toggle('on', state==='yellow');
+  greenL.classList.toggle('on', state==='green');
+}
+function pulseGreen(){
+  greenL.classList.add('pulse');
+  setTimeout(()=>greenL.classList.remove('pulse'),700);
+}
+setLight('red');
+
+/* ---------- Traffic state ---------- */
+let forcedGreenUntil = 0;
+let currentState = 'red';
+let cycleTimer = null;
+function startCycle(){
+  if(cycleTimer) clearInterval(cycleTimer);
+  setLight('red');
+  cycleTimer = setInterval(()=>{
+    if(performance.now() < forcedGreenUntil) return;
+    if(currentState === 'red'){ setLight('green'); currentState='green' }
+    else if(currentState === 'green'){ setLight('yellow'); currentState='yellow' }
+    else { setLight('red'); currentState='red' }
+  }, 3500);
+}
+startCycle();
+
+/* ---------- AUDIO: mic + detection ---------- */
+let audioCtx=null, analyser=null, mediaStream=null, timeData=null, freqData=null;
+let audioListening=false, audioDetected=false, audioPresent=false, audioLast=0;
+const envelope = []; const ENV_MAX = 50;
+
+async function startAudio(){
+  if(audioListening) return;
+  try{
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    mediaStream = await navigator.mediaDevices.getUserMedia({audio:{channelCount:1}, video:false});
+    const src = audioCtx.createMediaStreamSource(mediaStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.12;
+    timeData = new Float32Array(analyser.fftSize);
+    freqData = new Float32Array(analyser.frequencyBinCount);
+    src.connect(analyser);
+    audioListening = true; micState.textContent='Active';
+    btnAudio.textContent='Stop Audio';
+    audioLoop();
+    console.log('Audio started');
+  }catch(e){ console.error('audio init error',e); micState.textContent='Error' }
+}
+
+function stopAudio(){
+  if(mediaStream){ mediaStream.getTracks().forEach(t=>t.stop()); mediaStream=null; }
+  if(audioCtx){ try{ audioCtx.close(); }catch(_){} audioCtx=null; }
+  audioListening=false; micState.textContent='Inactive'; btnAudio.textContent='Start Audio';
+  audioDetected=false; audioPresent=false; audioLast=0;
+}
+
+function rmsToDb(rms){ return 20*Math.log10(rms); }
+function freqToIndex(freq){ if(!audioCtx) return 0; const nyq = audioCtx.sampleRate/2; return Math.round(freq/nyq * analyser.frequencyBinCount); }
+function computeBandEnergy(low,high,linear){ const s=freqToIndex(low), e=Math.min(linear.length-1, freqToIndex(high)); let sum=0,c=0; for(let i=s;i<=e;i++){ sum+=linear[i]; c++; } return c?sum/c:0; }
+
+let lastAudioSample=0;
+function audioLoop(ts){
+  requestAnimationFrame(audioLoop);
+  if(!analyser) return;
+  const now = performance.now();
+  if(now - lastAudioSample < 40) return;
+  lastAudioSample = now;
+
+  analyser.getFloatTimeDomainData(timeData);
+  let sq=0;
+  for(let i=0;i<timeData.length;i++) sq += timeData[i]*timeData[i];
+  const rms = Math.sqrt(sq/timeData.length);
+  const db = rms>0? rmsToDb(rms) : -200;
+
+  analyser.getFloatFrequencyData(freqData);
+  const linear = new Float32Array(freqData.length);
+  for(let i=0;i<freqData.length;i++) linear[i] = Math.max(0,(freqData[i]+140)/140);
+  const band = computeBandEnergy(600,1400,linear);
+
+  // envelope for oscillation
+  envelope.push(band); if(envelope.length>ENV_MAX) envelope.shift();
+  const meanEnv = envelope.reduce((a,b)=>a+b,0)/envelope.length;
+  const peak = Math.max(...envelope);
+  const p2m = meanEnv>0? peak/meanEnv : 0;
+  let variance=0; for(let i=0;i<envelope.length;i++) variance += (envelope[i]-meanEnv)*(envelope[i]-meanEnv); variance = envelope.length? variance/envelope.length:0;
+  const acLike = variance > 0.00003 ? 1:0;
+
+  // UI meter
+  const barPct = Math.min(100, Math.round((db+80)*1.6)); energyBar.style.width = Math.max(2,barPct)+'%';
+  dbVal.textContent = String(Number(dbRange.value));
+
+  // thresholds
+  const dbThreshold = Number(dbRange.value);
+  const energyThreshold = 0.01;
+  const p2mThreshold = 1.4;
+
+  const isLoud = db > dbThreshold;
+  const isSirenHeur = (isLoud && meanEnv > energyThreshold && p2m > p2mThreshold && acLike);
+
+  if(isSirenHeur){
+    audioDetected = true;
+    audioLast = now;
+    sirenState.textContent = 'Yes';
+    sirenState.style.color = 'var(--neon-green)';
+    // estimate approach delay by loudness (closer → smaller delay)
+    // map db in [-70..-10] to approachDelay ms in [4000..0]
+    const dbClose = -20, dbFar = -60;
+    let approachDelay = Math.round( Math.max(0, (dbClose - db)) * 100 ); // 100ms per dB
+    approachDelay = Math.min(4000, approachDelay);
+    // schedule presence after approachDelay, but extend presence while sound persists
+    if(approachDelay <= 120){
+      // very close: immediate presence
+      audioPresent = true;
+    } else {
+      setTimeout(()=>{
+        // only set present if last detection was recent
+        if(performance.now() - audioLast < 1600) audioPresent = true;
+      }, approachDelay);
+    }
+    // pulse visual
+    pulseGreen();
+  } else {
+    audioDetected = false;
+    // if no new audio for a bit, clear audioPresent
+    if(performance.now() - audioLast > 1700) { audioPresent = false; sirenState.textContent='No'; sirenState.style.color='white'; }
+  }
+
+  // main traffic decision (handled in loop below)
+}
+
+/* ---------- VIDEO: FaceDetector OR motion fallback ---------- */
+let camStream=null, camRunning=false, faceDetector=null, faceOK=('FaceDetector' in window);
+let videoPresent=false, videoDir='None', videoLast=0;
+async function startCamera(){
+  if(camRunning) return;
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:360}, audio:false});
+    cam.srcObject = camStream;
+    await cam.play();
+    camCanvas.width = cam.videoWidth; camCanvas.height = cam.videoHeight;
+    camState.textContent = 'Active';
+    btnCam.textContent = 'Stop Camera';
+    camRunning = true;
+    if(faceOK){
+      try{ faceDetector = new FaceDetector({fastMode:true, maxDetectedFaces:2}); console.log('FaceDetector available'); }
+      catch(e){ faceOK = false; console.warn('FaceDetector init failed', e); }
+    }
+    camLoop();
+  }catch(e){ console.error('camera error',e); camState.textContent='Error' }
+}
+function stopCamera(){
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  camRunning=false; camState.textContent='Inactive'; btnCam.textContent='Start Camera';
+  videoPresent=false; videoDir='None'; dirState.textContent='None';
+  overlay.innerHTML = '';
+}
+
+let lastFrameData = null;
+async function camLoop(){
+  if(!camRunning) return;
+  requestAnimationFrame(camLoop);
+  if(cam.readyState < 2) return;
+  const w = cam.videoWidth, h = cam.videoHeight;
+  ctx.drawImage(cam,0,0,w,h);
+  const frame = ctx.getImageData(0,0,w,h);
+
+  if(faceOK && faceDetector){
+    try{
+      const faces = await faceDetector.detect(cam); // pass video element directly (browser API)
+      // draw boxes
+      ctx.drawImage(cam,0,0,w,h);
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(87,255,139,0.9)';
+      let foundLeft=false;
+      for(const f of faces){
+        const x = f.boundingBox.x, y = f.boundingBox.y, fw=f.boundingBox.width, fh=f.boundingBox.height;
+        ctx.strokeRect(x,y,fw,fh);
+        const cx = x + fw/2;
+        if(cx < w * 0.45) foundLeft = true;
+      }
+      if(faces.length>0 && foundLeft){
+        videoPresent = true; videoDir = 'Left'; videoLast = performance.now();
+        dirState.textContent = 'Left'; dirState.style.color='var(--neon-green)';
+        overlay.innerHTML = '<div style="position:absolute;left:0;top:0;width:45%;height:100%;background:linear-gradient(90deg, rgba(87,255,139,0.06), transparent)"></div>';
+      } else if(faces.length>0){
+        videoPresent = true; videoDir = 'Right'; videoLast = performance.now();
+        dirState.textContent = 'Right'; dirState.style.color='var(--neon-green)';
+        overlay.innerHTML = '<div style="position:absolute;right:0;top:0;width:45%;height:100%;background:linear-gradient(90deg, rgba(87,255,139,0.06), transparent)"></div>';
+      } else {
+        // no face
+        if(performance.now() - videoLast > 1400){ videoPresent=false; videoDir='None'; dirState.textContent='None'; dirState.style.color='white'; overlay.innerHTML=''; }
+      }
+      return;
+    }catch(e){
+      // fallback to motion
+      // console.warn('face detect error', e);
+    }
+  }
+
+  // Motion fallback (frame difference)
+  if(!lastFrameData){ lastFrameData = frame.data.slice(); return; }
+  const diff = new Uint8ClampedArray(frame.data.length);
+  let motionCount=0, motionSumX=0;
+  for(let i=0;i<frame.data.length;i+=4){
+    const idx = i/4;
+    const x = idx % w; // pixel x
+    const d = Math.abs(frame.data[i] - lastFrameData[i]) + Math.abs(frame.data[i+1] - lastFrameData[i+1]) + Math.abs(frame.data[i+2] - lastFrameData[i+2]);
+    if(d > 60){
+      diff[i]=255; diff[i+1]=0; diff[i+2]=0; diff[i+3]=180;
+      motionCount++; motionSumX += x;
+    } else { diff[i]=0; diff[i+1]=0; diff[i+2]=0; diff[i+3]=0; }
+  }
+  ctx.putImageData(new ImageData(diff,w,h),0,0);
+  lastFrameData = frame.data.slice();
+
+  if(motionCount > 80){
+    const avgX = motionSumX / motionCount;
+    if(avgX < w * 0.45){
+      videoPresent=true; videoDir='Left'; videoLast=performance.now();
+      dirState.textContent='Left (motion)'; dirState.style.color='var(--neon-green)';
+      overlay.innerHTML = '<div style="position:absolute;left:0;top:0;width:45%;height:100%;background:linear-gradient(90deg, rgba(87,255,139,0.06), transparent)"></div>';
+    } else {
+      videoPresent=true; videoDir='Right'; videoLast=performance.now();
+      dirState.textContent='Right (motion)'; dirState.style.color='var(--neon-green)';
+      overlay.innerHTML = '<div style="position:absolute;right:0;top:0;width:45%;height:100%;background:linear-gradient(90deg, rgba(87,255,139,0.06), transparent)"></div>';
+    }
+  } else {
+    if(performance.now() - videoLast > 1400){ videoPresent=false; videoDir='None'; dirState.textContent='None'; dirState.style.color='white'; overlay.innerHTML=''; }
+  }
+}
+
+/* ---------- Demo siren (audio synth) ---------- */
+let demoOsc=null, demoLFO=null;
+function playDemoSiren(duration=4000){
+  if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  demoOsc = audioCtx.createOscillator(); demoLFO = audioCtx.createOscillator();
+  const lfoGain = audioCtx.createGain();
+  demoOsc.type = 'sawtooth'; demoOsc.frequency.value = 700;
+  demoLFO.type = 'sine'; demoLFO.frequency.value = 1.6; lfoGain.gain.value = 160;
+  demoLFO.connect(lfoGain); lfoGain.connect(demoOsc.frequency);
+  const g = audioCtx.createGain(); g.gain.value = 0.2;
+  demoOsc.connect(g); g.connect(audioCtx.destination);
+  // ✅ also connect demo siren to analyser for internal detection
+if (analyser) g.connect(analyser);
+
+  demoOsc.start(); demoLFO.start();
+  setTimeout(()=>{ try{ demoOsc.stop(); demoLFO.stop(); }catch(e){} demoOsc=null; demoLFO=null }, duration);
+}
+
+/* ---------- Simulation button (visual) ---------- */
+let simTimer = null;
+function simulateAmbulance(){
+  overlay.innerHTML = '';
+  const el = document.createElement('div');
+  el.style.position='absolute'; el.style.left='-40%'; el.style.top='30%'; el.style.width='40%'; el.style.height='40%';
+  el.style.background='linear-gradient(90deg,#fff,#ffd66b)'; el.style.borderRadius='10px'; el.style.display='flex';
+  el.style.alignItems='center'; el.style.justifyContent='center'; el.style.fontWeight='800'; el.style.color='#0b0216';
+  // ✅ use emoji instead of text
+el.textContent='🚑';
+el.style.fontSize = '60px';
+el.style.background = 'transparent';
+el.style.transform = 'scaleX(-1)';
+
+
+  overlay.appendChild(el);
+  // set video present sim
+  videoPresent = true; videoDir='Left'; videoLast = performance.now(); dirState.textContent='Left (sim)'; dirState.style.color='var(--neon-green)';
+  forcedGreenUntil = performance.now() + 6000; setLight('green'); pulseGreen(); let start = performance.now();
+  simTimer = setInterval(()=>{
+    const t = (performance.now()-start)/5000;
+    if(t>=1){ clearInterval(simTimer); simTimer=null; overlay.innerHTML=''; videoPresent=false; dirState.textContent='None'; dirState.style.color='white'; forcedGreenUntil = performance.now() + 5000; return; }
+    el.style.left = (-40 + t*100) + '%';
+  }, 40);
+}
+
+/* ---------- Main decision loop ---------- */
+function decisionLoop(){
+  requestAnimationFrame(decisionLoop);
+  const now = performance.now();
+
+  // If either detector indicates presence -> ensure green and hold
+  if(audioPresent || videoPresent){
+    // choose direction text
+    let dir = videoDir !== 'None' ? videoDir : (audioPresent ? 'Unknown (audio)' : 'None');
+    statusText.textContent = `Ambulance detected — ${dir}`;
+    alertMsg.style.borderColor = 'rgba(87,255,139,0.6)';
+    alertMsg.style.background = 'linear-gradient(90deg, rgba(87,255,139,0.04), rgba(61,225,255,0.02))';
+    // green logic: if video says left/right, keep that direction; audio estimates approach
+    forcedGreenUntil = Math.max(forcedGreenUntil, now + 6000); // extend while detection lasts
+    setLight('green'); pulseGreen();
+  } else {
+    // if neither present, allow grace time of 5s before reverting
+    if(now > forcedGreenUntil){
+      // resume cycle (cycleTimer will run)
+      // nothing to do here; cycleLoop uses forcedGreenUntil
+      statusText.textContent = 'Normal';
+      alertMsg.style.borderColor = 'rgba(255,255,255,0.06)';
+      alertMsg.style.background = 'linear-gradient(90deg, rgba(255,45,149,0.03), rgba(61,225,255,0.02))';
+    } else {
+      // still in grace
+      statusText.textContent = 'Grace hold';
+    }
+  }
+}
+decisionLoop();
+
+/* ---------- Buttons ---------- */
+btnAudio.addEventListener('click', async ()=>{
+  if(!audioListening) await startAudio(); else stopAudio();
+});
+btnDemo.addEventListener('click', ()=>{ playDemoSiren(); });
+btnCam.addEventListener('click', async ()=>{ if(!camRunning) await startCamera(); else stopCamera(); });
+btnSim.addEventListener('click', ()=> simulateAmbulance());
+btnStop.addEventListener('click', ()=>{ stopAudio(); stopCamera(); overlay.innerHTML=''; forcedGreenUntil = performance.now() + 2000; });
+
+/* ---------- cleanup ---------- */
+window.addEventListener('pagehide', ()=>{ stopAudio(); stopCamera(); });
+
+/* helpful */
+console.log('Prototype ready — start audio and camera. Use demo siren or play siren from phone near laptop mic.');
+
+</script>
+</body>
+</html>
